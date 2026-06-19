@@ -12,6 +12,7 @@ final class SpeechRecognizer {
 
     private var recognizer: SFSpeechRecognizer?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var sessionID: Int = 0
 
     init(localeIdentifier: String) {
         self.localeIdentifier = localeIdentifier
@@ -41,6 +42,8 @@ final class SpeechRecognizer {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
 
+        sessionID += 1
+        let currentSession = sessionID
         partialText = ""
         finalText = ""
         recognitionError = nil
@@ -48,6 +51,7 @@ final class SpeechRecognizer {
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
             DispatchQueue.main.async {
+                guard self.sessionID == currentSession else { return }
                 if let result {
                     self.partialText = result.bestTranscription.formattedString
                     if result.isFinal {

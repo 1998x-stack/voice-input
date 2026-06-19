@@ -105,9 +105,10 @@ final class GlobalEventMonitor {
         if let timer = pressTimer {
             timer.cancel()
             pressTimer = nil
-            onRelease?()
-        } else {
-            onRelease?()
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.onRelease?()
         }
 
         return nil
