@@ -30,7 +30,7 @@ final class TextInjector {
         }
     }
 
-    private func inputSourceIsCJK(_ source: TISInputSource?) -> Bool {
+    func inputSourceIsCJK(_ source: TISInputSource?) -> Bool {
         guard let source else { return false }
         guard let languages = TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages) else { return false }
         let langArray = Unmanaged<CFArray>.fromOpaque(languages).takeUnretainedValue() as [AnyObject]
