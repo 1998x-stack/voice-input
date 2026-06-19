@@ -10,7 +10,6 @@ final class AudioCaptureManager {
 
     private let engine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private let analysisQueue = DispatchQueue(label: "com.voiceinput.audio", qos: .userInteractive)
 
     func setRecognitionRequest(_ request: SFSpeechAudioBufferRecognitionRequest?) {
         recognitionRequest = request
