@@ -31,8 +31,13 @@ final class AudioCaptureManager {
         }
 
         engine.prepare()
-        try engine.start()
-        isRunning = true
+        do {
+            try engine.start()
+            isRunning = true
+        } catch {
+            inputNode.removeTap(onBus: 0)
+            throw error
+        }
     }
 
     func stop() {

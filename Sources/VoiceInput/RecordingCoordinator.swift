@@ -11,6 +11,7 @@ final class RecordingCoordinator {
     private let capsule = CapsuleController()
     private var isRecording = false
     private var hasDetectedSpeech = false
+    private var refinementTask: Task<Void, Never>?
 
     var menuBarFlashCallback: ((MenuBarFlash) -> Void)?
 
@@ -43,6 +44,8 @@ final class RecordingCoordinator {
     }
 
     func cancel() {
+        refinementTask?.cancel()
+        refinementTask = nil
         eventMonitor.stop()
         if isRecording {
             audioCapture.stop()
@@ -54,6 +57,10 @@ final class RecordingCoordinator {
 
     private func startRecording() {
         guard !isRecording else { return }
+
+        refinementTask?.cancel()
+        refinementTask = nil
+
         isRecording = true
         hasDetectedSpeech = false
 
@@ -112,15 +119,17 @@ final class RecordingCoordinator {
             model: UserDefaults.standard.string(forKey: "llmModel") ?? "deepseek-v4-flash"
         )
 
-        Task { [weak self] in
+        refinementTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let refined = try await self.llmRefiner.refine(text: text, config: config)
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.capsule.dismiss()
                     self.textInjector.inject(text: refined)
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.capsule.dismiss()
                     self.textInjector.inject(text: text)
