@@ -18,7 +18,7 @@ final class GlobalEventMonitor {
     func start() -> Bool {
         guard eventTap == nil else { return true }
 
-        let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+        let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.tapDisabledByTimeout.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -27,13 +27,21 @@ final class GlobalEventMonitor {
             eventsOfInterest: CGEventMask(eventMask),
             callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
                 let monitor = Unmanaged<GlobalEventMonitor>.fromOpaque(refcon!).takeUnretainedValue()
+                if type == .tapDisabledByTimeout {
+                    if let tap = monitor.eventTap {
+                        CGEvent.tapEnable(tap: tap, enable: true)
+                    }
+                    return nil
+                }
                 return monitor.handleEvent(proxy: proxy, type: type, event: event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
+            NSLog("[VoiceInput] Event tap creation failed — no Accessibility permission?")
             return false
         }
 
+        NSLog("[VoiceInput] Event tap created successfully")
         eventTap = tap
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
@@ -75,8 +83,6 @@ final class GlobalEventMonitor {
                 return Unmanaged.passUnretained(event)
             }
         } else if isPressed && pressTimer != nil {
-            // Another key pressed while Fn is held — Fn is being used as modifier.
-            // Cancel the recording timer and let all subsequent events through.
             pressTimer?.cancel()
             pressTimer = nil
             return Unmanaged.passUnretained(event)

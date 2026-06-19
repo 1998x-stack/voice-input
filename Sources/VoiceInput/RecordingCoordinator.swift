@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-final class RecordingCoordinator {
+final class RecordingCoordinator: @unchecked Sendable {
     private let eventMonitor = GlobalEventMonitor()
     private let audioCapture = AudioCaptureManager()
     private let textInjector = TextInjector()
@@ -73,39 +73,51 @@ final class RecordingCoordinator {
 
             observeStreamingState()
         } catch {
+            speechRecognizer.stopRecognition()
             capsule.dismiss()
             isRecording = false
         }
+    }
+
+    private func abortRecording() {
+        isRecording = false
+        audioCapture.stop()
+        speechRecognizer.stopRecognition()
+        capsule.dismiss()
     }
 
     private func stopRecording() {
         guard isRecording else { return }
         isRecording = false
 
+        let capturedText = speechRecognizer.partialText
+
         audioCapture.stop()
         speechRecognizer.stopRecognition()
 
-        let finalText = speechRecognizer.finalText.isEmpty
-            ? speechRecognizer.partialText
-            : speechRecognizer.finalText
-
-        guard !finalText.isEmpty, hasDetectedSpeech else {
+        guard !capturedText.isEmpty, hasDetectedSpeech else {
             capsule.dismiss()
             menuBarFlashCallback?(.warning)
             return
         }
 
         if isLLMEnabled() {
-            refineThenInject(text: finalText)
+            refineThenInject(text: capturedText)
         } else {
             capsule.dismiss()
-            textInjector.inject(text: finalText)
+            textInjector.inject(text: capturedText)
         }
+    }
+
+    private func llmApiKey() -> String {
+        ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"]
+            ?? UserDefaults.standard.string(forKey: "llmApiKey")
+            ?? ""
     }
 
     private func isLLMEnabled() -> Bool {
         guard UserDefaults.standard.bool(forKey: "llmEnabled") else { return false }
-        let apiKey = UserDefaults.standard.string(forKey: "llmApiKey") ?? ""
+        let apiKey = llmApiKey()
         let baseURL = UserDefaults.standard.string(forKey: "llmBaseURL") ?? ""
         return !apiKey.isEmpty && !baseURL.isEmpty
     }
@@ -115,7 +127,7 @@ final class RecordingCoordinator {
 
         let config = LLMRefiner.Config(
             baseURL: UserDefaults.standard.string(forKey: "llmBaseURL") ?? "",
-            apiKey: UserDefaults.standard.string(forKey: "llmApiKey") ?? "",
+            apiKey: llmApiKey(),
             model: UserDefaults.standard.string(forKey: "llmModel") ?? "deepseek-v4-flash"
         )
 
@@ -125,12 +137,14 @@ final class RecordingCoordinator {
                 let refined = try await self.llmRefiner.refine(text: text, config: config)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
+                    guard !self.isRecording else { return }
                     self.capsule.dismiss()
                     self.textInjector.inject(text: refined)
                 }
             } catch {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
+                    guard !self.isRecording else { return }
                     self.capsule.dismiss()
                     self.textInjector.inject(text: text)
                     self.menuBarFlashCallback?(.amber)
@@ -144,6 +158,12 @@ final class RecordingCoordinator {
             guard let self, self.isRecording else { return }
             let rms = self.audioCapture.rmsLevel
             let transcription = self.speechRecognizer.partialText
+            if self.speechRecognizer.recognitionError != nil {
+                self.capsule.update(rmsLevel: 0, transcription: "Recognition failed")
+                self.menuBarFlashCallback?(.warning)
+                self.abortRecording()
+                return
+            }
             if rms > 0.01 { self.hasDetectedSpeech = true }
             self.capsule.update(rmsLevel: rms, transcription: transcription)
         } onChange: { [weak self] in

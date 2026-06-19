@@ -4,8 +4,10 @@ import SwiftUI
 final class CapsuleController {
     private var panel: NSPanel?
     private var hostingView: NSHostingView<CapsuleContentView>?
+    private var showGeneration: UInt = 0
 
     func show(rmsLevel: Float = 0, transcription: String = "", isRefining: Bool = false) {
+        showGeneration &+= 1
         if panel == nil {
             createPanel()
         }
@@ -35,15 +37,17 @@ final class CapsuleController {
 
     func dismiss() {
         guard let panel, panel.isVisible else { return }
+        let generationAtDismiss = showGeneration
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.22
             ctx.allowsImplicitAnimation = true
             panel.animator().alphaValue = 0
             panel.animator().setContentSize(NSSize(width: panel.frame.width * 0.9, height: panel.frame.height * 0.9))
         } completionHandler: { [weak self] in
+            guard let self, self.showGeneration == generationAtDismiss else { return }
             panel.orderOut(nil)
             panel.alphaValue = 1
-            self?.hostingView?.rootView = CapsuleContentView(rmsLevel: 0, transcription: "", isRefining: false)
+            self.hostingView?.rootView = CapsuleContentView(rmsLevel: 0, transcription: "", isRefining: false)
         }
     }
 
@@ -147,6 +151,9 @@ final class CapsuleController {
 
     private func currentScreen() -> NSScreen {
         let mouseLocation = NSEvent.mouseLocation
-        return NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) ?? NSScreen.screens.first!
+        return NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
+            ?? NSScreen.screens.first
+            ?? NSScreen.main
+            ?? NSScreen()
     }
 }

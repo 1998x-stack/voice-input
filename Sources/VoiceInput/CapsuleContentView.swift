@@ -65,7 +65,7 @@ struct WaveformView: View {
             }
             .frame(width: 44, height: 32)
         }
-        .onChange(of: rmsLevel) { newValue in
+        .onChange(of: rmsLevel) { oldValue, newValue in
             let coefficient = newValue > envelope ? attack : release
             envelope = envelope * (1 - coefficient) + newValue * coefficient
         }
@@ -74,7 +74,7 @@ struct WaveformView: View {
     private func barHeight(for index: Int) -> CGFloat {
         let jitter = Float.random(in: jitterRange)
         let weighted = envelope * weights[index] * (1 + jitter)
-        let clamped = max(minBarHeight, min(weighted * maxBarHeight, maxBarHeight))
+        let clamped = max(minBarHeight, min(CGFloat(weighted) * maxBarHeight, maxBarHeight))
         return CGFloat(clamped)
     }
 }
