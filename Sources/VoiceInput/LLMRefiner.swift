@@ -1,7 +1,7 @@
 import Foundation
 
 final class LLMRefiner {
-    private let session: URLSession = {
+    var session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 5
         config.timeoutIntervalForResource = 5
@@ -71,7 +71,7 @@ final class LLMRefiner {
 
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200...299).contains(statusCode) else {
-            throw RefineError.apiError(statusCode)
+            throw statusCode == 429 ? RefineError.tooManyRequests : RefineError.apiError(statusCode)
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -90,11 +90,19 @@ final class LLMRefiner {
         case invalidURL
         case apiError(Int)
         case emptyResponse
+        case tooManyRequests
 
         var errorDescription: String? {
             switch self {
             case .invalidURL: "Invalid API URL"
-            case .apiError(let code): "API request failed (HTTP \(code)). Check your API key and base URL."
+            case .tooManyRequests: "Too many requests — wait a moment and try again"
+            case .apiError(let code):
+                switch code {
+                case 401: "Invalid API key"
+                case 403: "Access denied — check your API key"
+                case 429: "Too many requests — wait a moment and try again"
+                default: "API error (HTTP \(code)) — check your API key and base URL"
+                }
             case .emptyResponse: "API returned an empty response"
             }
         }

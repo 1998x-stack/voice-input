@@ -11,7 +11,7 @@ struct SettingsWindowView: View {
 
     init() {
         _baseURL = State(initialValue: UserDefaults.standard.string(forKey: "llmBaseURL") ?? "https://api.deepseek.com/v1")
-        _apiKey = State(initialValue: UserDefaults.standard.string(forKey: "llmApiKey") ?? "")
+        _apiKey = State(initialValue: ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"] ?? UserDefaults.standard.string(forKey: "llmApiKey") ?? "")
         _model = State(initialValue: UserDefaults.standard.string(forKey: "llmModel") ?? "deepseek-v4-flash")
     }
 
