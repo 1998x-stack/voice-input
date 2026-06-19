@@ -7,11 +7,11 @@ final class SpeechRecognizer {
     var partialText: String = ""
     var finalText: String = ""
     var isAvailable: Bool = false
+    var recognitionError: String?
     var localeIdentifier: String
 
     private var recognizer: SFSpeechRecognizer?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private let request = SFSpeechAudioBufferRecognitionRequest()
 
     init(localeIdentifier: String) {
         self.localeIdentifier = localeIdentifier
@@ -20,6 +20,7 @@ final class SpeechRecognizer {
 
     func setLocale(_ identifier: String) {
         guard identifier != localeIdentifier else { return }
+        stopRecognition()
         localeIdentifier = identifier
         refreshRecognizer()
     }
@@ -30,18 +31,19 @@ final class SpeechRecognizer {
         isAvailable = recognizer?.isAvailable ?? false
     }
 
-    func audioBufferRequest() -> SFSpeechAudioBufferRecognitionRequest {
-        request.shouldReportPartialResults = true
-        return request
-    }
-
-    func startRecognition() throws {
+    func startRecognition() throws -> SFSpeechAudioBufferRecognitionRequest {
         guard let recognizer, recognizer.isAvailable else {
             throw RecognitionError.unavailable
         }
 
+        stopRecognition()
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+
         partialText = ""
         finalText = ""
+        recognitionError = nil
 
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
@@ -53,10 +55,12 @@ final class SpeechRecognizer {
                     }
                 }
                 if let error {
-                    self.partialText = ""
+                    self.recognitionError = error.localizedDescription
                 }
             }
         }
+
+        return request
     }
 
     func stopRecognition() {
