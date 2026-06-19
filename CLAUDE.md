@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 make build      # Release build + assemble .app + ad-hoc codesign
-make run        # Build and launch the app
+make dev        # Release build only (no codesign, faster iterations)
+make run        # Build and launch the app (includes codesign)
+make run-dev    # Dev build + launch (skips codesign)
 make install    # Build and copy to /Applications/
 make clean      # Remove build artifacts
 swift build     # Debug build only (no .app assembly)
@@ -14,6 +16,16 @@ swift build     # Debug build only (no .app assembly)
 # Signed distribution build:
 make build SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 ```
+
+## Tests
+
+```bash
+swift test                          # Run all tests
+swift test --filter RecordingCoordinatorTests   # Single test class
+swift test --filter testIsLLMEnabled            # Single test method
+```
+
+All tests are in `Tests/VoiceInputTests/`. Each source file has a matching test file. Tests use `@testable import VoiceInput` and clear UserDefaults in setUp/tearDown.
 
 No external dependencies — system frameworks only (AppKit, SwiftUI, AVFoundation, Speech, CoreGraphics, Carbon).
 
@@ -83,7 +95,7 @@ OpenAI-compatible chat completions. Non-streaming, temperature 0, 5-second timeo
 | `recognitionLocale` | `zh-CN` | Speech recognition locale |
 | `llmEnabled` | `false` | LLM refinement toggle |
 | `llmBaseURL` | `https://api.deepseek.com/v1` | API base URL |
-| `llmApiKey` | `""` | API key |
+| `llmApiKey` | `""` | API key (also settable via `DEEPSEEK_API_KEY` env var, which takes precedence if present) |
 | `llmModel` | `deepseek-v4-flash` | Model name |
 
 ## Info.plist
