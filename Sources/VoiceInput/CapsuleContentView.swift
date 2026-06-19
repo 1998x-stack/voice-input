@@ -39,8 +39,13 @@ struct WaveformView: View {
     let rmsLevel: Float
 
     private let weights: [Float] = [0.5, 0.8, 1.0, 0.75, 0.55]
+    private let attack: Float = 0.40
+    private let release: Float = 0.15
+    private let jitterRange: ClosedRange<Float> = -0.04...0.04
+    private let maxBarHeight: CGFloat = 32
+    private let minBarHeight: CGFloat = 3
+
     @State private var envelope: Float = 0
-    @State private var jitters: [Float] = [0, 0, 0, 0, 0]
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1/30)) { _ in
@@ -60,18 +65,16 @@ struct WaveformView: View {
             }
             .frame(width: 44, height: 32)
         }
+        .onChange(of: rmsLevel) { newValue in
+            let coefficient = newValue > envelope ? attack : release
+            envelope = envelope * (1 - coefficient) + newValue * coefficient
+        }
     }
 
     private func barHeight(for index: Int) -> CGFloat {
-        let attack: Float = 0.40
-        let release: Float = 0.15
-        let coefficient = rmsLevel > envelope ? attack : release
-        envelope = envelope * (1 - coefficient) + rmsLevel * coefficient
-
-        jitters[index] = Float.random(in: -0.04...0.04)
-
-        let weighted = envelope * weights[index] * (1 + jitters[index])
-        let clamped = max(3, min(weighted * 32, 32))
+        let jitter = Float.random(in: jitterRange)
+        let weighted = envelope * weights[index] * (1 + jitter)
+        let clamped = max(minBarHeight, min(weighted * maxBarHeight, maxBarHeight))
         return CGFloat(clamped)
     }
 }
