@@ -4,7 +4,7 @@ APP_BUNDLE = .build/release/$(APP_NAME).app
 PLIST = Sources/$(APP_NAME)/Info.plist
 SIGNING_IDENTITY ?= -
 
-.PHONY: build run install clean
+.PHONY: build run install clean dev run-dev
 
 build:
 	swift build -c release --product $(APP_NAME)
@@ -15,6 +15,14 @@ build:
 	codesign -s $(SIGNING_IDENTITY) --deep --force $(APP_BUNDLE)
 
 run: build
+	open $(APP_BUNDLE)
+
+dev:
+	swift build -c release --product $(APP_NAME)
+	mkdir -p $(APP_BUNDLE)/Contents/MacOS
+	cp $(BINARY) $(APP_BUNDLE)/Contents/MacOS/
+
+run-dev: dev
 	open $(APP_BUNDLE)
 
 install: build
