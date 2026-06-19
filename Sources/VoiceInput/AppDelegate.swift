@@ -75,15 +75,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.menu = menu
     }
 
-    // MARK: - Coordinator
+    private var hasShownPermissionAlert = false
 
     private func setupCoordinator() {
         coordinator = RecordingCoordinator()
+        attemptEventTapCreation()
 
-        if !(coordinator?.startMonitoring() ?? false) {
+        coordinator?.menuBarFlashCallback = { [weak self] flash in
+            DispatchQueue.main.async {
+                self?.flashIcon(flash)
+            }
+        }
+    }
+
+    private func attemptEventTapCreation() {
+        if coordinator?.startMonitoring() ?? false {
+            return
+        }
+
+        if !hasShownPermissionAlert {
+            hasShownPermissionAlert = true
+            NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "Accessibility Permission Required"
-            alert.informativeText = "Voice Input needs Accessibility permission in System Settings to monitor the Fn key."
+            alert.informativeText = "Voice Input needs Accessibility permission to monitor the Fn key. Grant permission in System Settings — the app will reconnect automatically."
             alert.addButton(withTitle: "Open System Settings")
             alert.addButton(withTitle: "Quit")
             if alert.runModal() == .alertFirstButtonReturn {
@@ -93,10 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        coordinator?.menuBarFlashCallback = { [weak self] flash in
-            DispatchQueue.main.async {
-                self?.flashIcon(flash)
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(3)) { [weak self] in
+            self?.attemptEventTapCreation()
         }
     }
 
