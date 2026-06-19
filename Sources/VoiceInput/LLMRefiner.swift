@@ -26,13 +26,29 @@ final class LLMRefiner {
     Respond with ONLY the corrected text. No explanations, no prefixes, no markdown.
     """
 
-    struct Config {
+    struct Config: Sendable {
         let baseURL: String
         let apiKey: String
         let model: String
     }
 
     func refine(text: String, config: Config) async throws -> String {
+        let messages: [[String: String]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": text]
+        ]
+        let content = try await performRequest(messages: messages, maxTokens: 2048, config: config)
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func testConnection(config: Config) async throws -> String {
+        let messages: [[String: String]] = [
+            ["role": "user", "content": "Hello"]
+        ]
+        return try await performRequest(messages: messages, maxTokens: 10, config: config)
+    }
+
+    private func performRequest(messages: [[String: String]], maxTokens: Int, config: Config) async throws -> String {
         let base = config.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(base)/chat/completions") else {
             throw RefineError.invalidURL
@@ -40,12 +56,9 @@ final class LLMRefiner {
 
         let body: [String: Any] = [
             "model": config.model,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": text]
-            ],
+            "messages": messages,
             "temperature": 0,
-            "max_tokens": 2048
+            "max_tokens": maxTokens
         ]
 
         var request = URLRequest(url: url)
@@ -56,9 +69,9 @@ final class LLMRefiner {
 
         let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw RefineError.apiError
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(statusCode) else {
+            throw RefineError.apiError(statusCode)
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -70,56 +83,18 @@ final class LLMRefiner {
             throw RefineError.emptyResponse
         }
 
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    func testConnection(config: Config) async throws -> String {
-        let base = config.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: "\(base)/chat/completions") else {
-            throw RefineError.invalidURL
-        }
-
-        let body: [String: Any] = [
-            "model": config.model,
-            "messages": [
-                ["role": "user", "content": "Hello"]
-            ],
-            "max_tokens": 10
-        ]
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw RefineError.apiError
-        }
-
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let first = choices.first,
-              let message = first["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw RefineError.emptyResponse
-        }
-
         return content
     }
 
     enum RefineError: LocalizedError {
         case invalidURL
-        case apiError
+        case apiError(Int)
         case emptyResponse
 
         var errorDescription: String? {
             switch self {
             case .invalidURL: "Invalid API URL"
-            case .apiError: "API request failed. Check your API key and base URL."
+            case .apiError(let code): "API request failed (HTTP \(code)). Check your API key and base URL."
             case .emptyResponse: "API returned an empty response"
             }
         }
