@@ -32,18 +32,23 @@ final class RecordingCoordinator: @unchecked Sendable {
 
     private func setupEventMonitor() {
         eventMonitor.onPress = { [weak self] in
+            NSLog("[VoiceInput] RecordingCoordinator.onPress → startRecording()")
             self?.startRecording()
         }
         eventMonitor.onRelease = { [weak self] in
+            NSLog("[VoiceInput] RecordingCoordinator.onRelease → stopRecording()")
             self?.stopRecording()
         }
     }
 
     func startMonitoring() -> Bool {
-        eventMonitor.start()
+        let result = eventMonitor.start()
+        NSLog("[VoiceInput] startMonitoring result: \(result)")
+        return result
     }
 
     func cancel() {
+        NSLog("[VoiceInput] RecordingCoordinator.cancel()")
         refinementTask?.cancel()
         refinementTask = nil
         eventMonitor.stop()
@@ -56,7 +61,11 @@ final class RecordingCoordinator: @unchecked Sendable {
     }
 
     private func startRecording() {
-        guard !isRecording else { return }
+        NSLog("[VoiceInput] startRecording called, isRecording=\(isRecording)")
+        guard !isRecording else {
+            NSLog("[VoiceInput] startRecording ignored — already recording")
+            return
+        }
 
         refinementTask?.cancel()
         refinementTask = nil
@@ -65,14 +74,17 @@ final class RecordingCoordinator: @unchecked Sendable {
         hasDetectedSpeech = false
 
         capsule.show(rmsLevel: 0, transcription: "", isRefining: false)
+        NSLog("[VoiceInput] Capsule shown, starting audio + recognition...")
 
         do {
             let request = try speechRecognizer.startRecognition()
             audioCapture.setRecognitionRequest(request)
             try audioCapture.start()
+            NSLog("[VoiceInput] Audio capture started successfully")
 
             observeStreamingState()
         } catch {
+            NSLog("[VoiceInput] startRecording FAILED: \(error.localizedDescription)")
             speechRecognizer.stopRecognition()
             capsule.dismiss()
             isRecording = false
@@ -87,20 +99,27 @@ final class RecordingCoordinator: @unchecked Sendable {
     }
 
     private func stopRecording() {
-        guard isRecording else { return }
+        NSLog("[VoiceInput] stopRecording called, isRecording=\(isRecording)")
+        guard isRecording else {
+            NSLog("[VoiceInput] stopRecording ignored — not recording")
+            return
+        }
         isRecording = false
 
         let capturedText = speechRecognizer.partialText
+        NSLog("[VoiceInput] Captured text: '\(capturedText)', hasDetectedSpeech=\(hasDetectedSpeech)")
 
         audioCapture.stop()
         speechRecognizer.stopRecognition()
 
         guard !capturedText.isEmpty, hasDetectedSpeech else {
+            NSLog("[VoiceInput] No speech detected — dismissing capsule, showing warning")
             capsule.dismiss()
             menuBarFlashCallback?(.warning)
             return
         }
 
+        NSLog("[VoiceInput] Text captured, isLLMEnabled=\(isLLMEnabled())")
         if isLLMEnabled() {
             refineThenInject(text: capturedText)
         } else {
@@ -109,13 +128,13 @@ final class RecordingCoordinator: @unchecked Sendable {
         }
     }
 
-    private func llmApiKey() -> String {
+    func llmApiKey() -> String {
         ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"]
             ?? UserDefaults.standard.string(forKey: "llmApiKey")
             ?? ""
     }
 
-    private func isLLMEnabled() -> Bool {
+    func isLLMEnabled() -> Bool {
         guard UserDefaults.standard.bool(forKey: "llmEnabled") else { return false }
         let apiKey = llmApiKey()
         let baseURL = UserDefaults.standard.string(forKey: "llmBaseURL") ?? ""

@@ -10,6 +10,7 @@ final class GlobalEventMonitor {
     private var pressTimer: DispatchWorkItem?
     private let debounceInterval: TimeInterval = 0.2
     private var isPressed = false
+    private var didFirePress = false
 
     func checkAccessibilityPermission() -> Bool {
         CGPreflightListenEventAccess()
@@ -70,7 +71,7 @@ final class GlobalEventMonitor {
         stop()
     }
 
-    private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
         if keyCode == 63 {
@@ -91,12 +92,16 @@ final class GlobalEventMonitor {
         return Unmanaged.passUnretained(event)
     }
 
-    private func handleFnKeyDown(event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handleFnKeyDown(event: CGEvent) -> Unmanaged<CGEvent>? {
         guard !isPressed else { return Unmanaged.passUnretained(event) }
         isPressed = true
+        didFirePress = false
 
         let timer = DispatchWorkItem { [weak self] in
-            self?.onPress?()
+            guard let self else { return }
+            self.pressTimer = nil
+            self.didFirePress = true
+            self.onPress?()
         }
         pressTimer = timer
         DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: timer)
@@ -104,17 +109,17 @@ final class GlobalEventMonitor {
         return nil
     }
 
-    private func handleFnKeyUp(event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handleFnKeyUp(event: CGEvent) -> Unmanaged<CGEvent>? {
         guard isPressed else { return Unmanaged.passUnretained(event) }
         isPressed = false
 
-        if let timer = pressTimer {
-            timer.cancel()
-            pressTimer = nil
-        }
+        pressTimer?.cancel()
+        pressTimer = nil
 
-        DispatchQueue.main.async { [weak self] in
-            self?.onRelease?()
+        if didFirePress {
+            DispatchQueue.main.async { [weak self] in
+                self?.onRelease?()
+            }
         }
 
         return nil

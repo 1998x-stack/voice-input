@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hasShownPermissionAlert = false
 
     private func setupCoordinator() {
+        NSLog("[VoiceInput] AppDelegate.setupCoordinator()")
         coordinator = RecordingCoordinator()
         attemptEventTapCreation()
 
@@ -89,9 +90,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func attemptEventTapCreation() {
+        NSLog("[VoiceInput] attemptEventTapCreation() — calling startMonitoring")
         if coordinator?.startMonitoring() ?? false {
+            NSLog("[VoiceInput] Event tap started successfully from AppDelegate")
             return
         }
+
+        NSLog("[VoiceInput] Event tap FAILED — showing permission alert? hasShownAlert=\(hasShownPermissionAlert)")
 
         if !hasShownPermissionAlert {
             hasShownPermissionAlert = true
